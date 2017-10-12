@@ -3,7 +3,6 @@ var recLength = 0,
   recBuffersR = [],
   sampleRate;
 
-
 self.onmessage = function(e) {
   switch(e.data.command){
     case 'init':
@@ -34,11 +33,12 @@ function record(inputBuffer){
   recLength += inputBuffer[0].length;
 }
 
-function exportWAV(type){
+function exportWAV(type, channels){
+  channels = channels || 1;
   var bufferL = mergeBuffers(recBuffersL, recLength);
   var bufferR = mergeBuffers(recBuffersR, recLength);
-  var interleaved = interleave(bufferL, bufferR);
-  var dataview = encodeWAV(interleaved);
+  var buf = (channels === 2) ? interleave(bufferL, bufferR) : bufferR;
+  var dataview = (type === 'audio/raw') ? encodeRAW(buf) : encodeWAV(buf, channels);
   var audioBlob = new Blob([dataview], { type: type });
 
   self.postMessage(audioBlob);
@@ -95,7 +95,15 @@ function writeString(view, offset, string){
   }
 }
 
-function encodeWAV(samples){
+function encodeRAW(samples){
+  var buffer = new ArrayBuffer(samples.length * 2);
+  var view = new DataView(buffer);
+  floatTo16BitPCM(view, 0, samples);
+  return view;
+}
+
+function encodeWAV(samples, channels){
+  channels = channels || 1;
   var buffer = new ArrayBuffer(44 + samples.length * 2);
   var view = new DataView(buffer);
 
@@ -112,7 +120,7 @@ function encodeWAV(samples){
   /* sample format (raw) */
   view.setUint16(20, 1, true);
   /* channel count */
-  view.setUint16(22, 2, true);
+  view.setUint16(22, channels, true);
   /* sample rate */
   view.setUint32(24, sampleRate, true);
   /* byte rate (sample rate * block align) */
